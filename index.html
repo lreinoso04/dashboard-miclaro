@@ -1,0 +1,316 @@
+import React, { useState, useMemo } from 'react';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { Calendar, TrendingUp, TrendingDown, Minus, AlertCircle, CheckCircle } from 'lucide-react';
+
+const DashboardMiClaro = () => {
+  // Datos de ejemplo - En Excel esto vendría de la tabla Datos_Brutos
+  const datosBase = useMemo(() => {
+    const datos = [];
+    const fechaInicio = new Date(2025, 9, 1); // Octubre 2025
+    
+    for (let i = 0; i < 31; i++) {
+      const fecha = new Date(fechaInicio);
+      fecha.setDate(fechaInicio.getDate() + i);
+      
+      datos.push({
+        dia: i + 1,
+        fecha: fecha.toISOString().split('T')[0],
+        mes: 'Octubre',
+        semana: Math.ceil((i + 1) / 7),
+        volumenAutomatico: Math.floor(8000 + Math.random() * 2000 + i * 50),
+        ticketsCreados: Math.floor(450 - i * 8 + Math.random() * 50)
+      });
+    }
+    return datos;
+  }, []);
+
+  const [diaSeleccionado, setDiaSeleccionado] = useState(22);
+  
+  // Cálculos dinámicos basados en el día seleccionado
+  const metricas = useMemo(() => {
+    const actual = datosBase.find(d => d.dia === diaSeleccionado);
+    const anterior = datosBase.find(d => d.dia === diaSeleccionado - 1);
+    
+    if (!actual) return null;
+    
+    const cambioVolumen = anterior ? ((actual.volumenAutomatico - anterior.volumenAutomatico) / anterior.volumenAutomatico * 100).toFixed(2) : 0;
+    const cambioTickets = anterior ? ((actual.ticketsCreados - anterior.ticketsCreados) / anterior.ticketsCreados * 100).toFixed(2) : 0;
+    
+    // Promedio móvil 7 días
+    const ultimos7 = datosBase.filter(d => d.dia <= diaSeleccionado && d.dia > diaSeleccionado - 7);
+    const promedioVolumen = (ultimos7.reduce((sum, d) => sum + d.volumenAutomatico, 0) / ultimos7.length).toFixed(0);
+    const promedioTickets = (ultimos7.reduce((sum, d) => sum + d.ticketsCreados, 0) / ultimos7.length).toFixed(0);
+    
+    return {
+      actual,
+      anterior,
+      cambioVolumen: parseFloat(cambioVolumen),
+      cambioTickets: parseFloat(cambioTickets),
+      promedioVolumen: parseInt(promedioVolumen),
+      promedioTickets: parseInt(promedioTickets),
+      tendenciaVolumen: cambioVolumen > 0 ? 'Sube' : cambioVolumen < 0 ? 'Baja' : 'Igual',
+      tendenciaTickets: cambioTickets < 0 ? 'Mejora' : cambioTickets > 0 ? 'Retroceso' : 'Igual'
+    };
+  }, [diaSeleccionado, datosBase]);
+
+  // Datos para gráficos filtrados por semana
+  const datosPorSemana = useMemo(() => {
+    const semanaActual = Math.ceil(diaSeleccionado / 7);
+    return datosBase.filter(d => d.semana === semanaActual);
+  }, [diaSeleccionado, datosBase]);
+
+  const getColorTendencia = (tipo) => {
+    if (tipo === 'Mejora' || tipo === 'Sube') return 'text-green-600 bg-green-50';
+    if (tipo === 'Retroceso' || tipo === 'Baja') return 'text-red-600 bg-red-50';
+    return 'text-yellow-600 bg-yellow-50';
+  };
+
+  const getIconoTendencia = (tipo) => {
+    if (tipo === 'Mejora' || tipo === 'Sube') return <TrendingUp className="w-6 h-6" />;
+    if (tipo === 'Retroceso' || tipo === 'Baja') return <TrendingDown className="w-6 h-6" />;
+    return <Minus className="w-6 h-6" />;
+  };
+
+  if (!metricas) return null;
+
+  return (
+    <div className="w-full min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-800">Dashboard Mi Claro SSO</h1>
+              <p className="text-gray-600 mt-1">Analista Sr. de Evolución - Monitoreo Diario</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <Calendar className="w-8 h-8 text-indigo-600" />
+              <div className="text-right">
+                <p className="text-sm text-gray-600">Fecha Análisis</p>
+                <p className="text-lg font-semibold text-gray-800">{metricas.actual.fecha}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Control de Día */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Seleccionar Día del Mes (Celda B2)
+          </label>
+          <div className="flex items-center gap-4">
+            <input
+              type="number"
+              min="1"
+              max="31"
+              value={diaSeleccionado}
+              onChange={(e) => setDiaSeleccionado(Math.max(1, Math.min(31, parseInt(e.target.value) || 1)))}
+              className="w-32 px-4 py-3 text-2xl font-bold text-center border-2 border-indigo-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+            />
+            <div className="text-sm text-gray-600">
+              <p><strong>Mes:</strong> {metricas.actual.mes}</p>
+              <p><strong>Semana:</strong> {metricas.actual.semana} de 5</p>
+            </div>
+          </div>
+        </div>
+
+        {/* KPIs Principales */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Volumen Automático Hoy */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-600">Volumen Automático</h3>
+              <CheckCircle className="w-5 h-5 text-blue-500" />
+            </div>
+            <p className="text-3xl font-bold text-gray-800">{metricas.actual.volumenAutomatico.toLocaleString()}</p>
+            <div className={`flex items-center gap-2 mt-3 px-3 py-1 rounded-full inline-flex ${getColorTendencia(metricas.tendenciaVolumen)}`}>
+              {getIconoTendencia(metricas.tendenciaVolumen)}
+              <span className="text-sm font-semibold">{metricas.cambioVolumen}%</span>
+            </div>
+          </div>
+
+          {/* Tickets Creados Hoy */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-600">Tickets Creados</h3>
+              <AlertCircle className="w-5 h-5 text-orange-500" />
+            </div>
+            <p className="text-3xl font-bold text-gray-800">{metricas.actual.ticketsCreados.toLocaleString()}</p>
+            <div className={`flex items-center gap-2 mt-3 px-3 py-1 rounded-full inline-flex ${getColorTendencia(metricas.tendenciaTickets)}`}>
+              {getIconoTendencia(metricas.tendenciaTickets)}
+              <span className="text-sm font-semibold">{Math.abs(metricas.cambioTickets)}%</span>
+            </div>
+          </div>
+
+          {/* Promedio Móvil Volumen */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-600">Promedio 7 días - Volumen</h3>
+              <TrendingUp className="w-5 h-5 text-green-500" />
+            </div>
+            <p className="text-3xl font-bold text-gray-800">{metricas.promedioVolumen.toLocaleString()}</p>
+            <p className="text-xs text-gray-500 mt-3">Últimos 7 días</p>
+          </div>
+
+          {/* Promedio Móvil Tickets */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-600">Promedio 7 días - Tickets</h3>
+              <TrendingDown className="w-5 h-5 text-red-500" />
+            </div>
+            <p className="text-3xl font-bold text-gray-800">{metricas.promedioTickets.toLocaleString()}</p>
+            <p className="text-xs text-gray-500 mt-3">Últimos 7 días</p>
+          </div>
+        </div>
+
+        {/* Comparación Día Anterior */}
+        {metricas.anterior && (
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Comparación con Día Anterior</h3>
+            <div className="grid grid-cols-2 gap-6">
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Volumen Día Anterior</p>
+                <p className="text-2xl font-bold text-gray-700">{metricas.anterior.volumenAutomatico.toLocaleString()}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Diferencia: {(metricas.actual.volumenAutomatico - metricas.anterior.volumenAutomatico).toLocaleString()}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Tickets Día Anterior</p>
+                <p className="text-2xl font-bold text-gray-700">{metricas.anterior.ticketsCreados.toLocaleString()}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Diferencia: {(metricas.actual.ticketsCreados - metricas.anterior.ticketsCreados).toLocaleString()}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Gráficos */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          
+          {/* Gráfico Volumen Automático */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Tendencia Volumen Automático - Mes Completo</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <AreaChart data={datosBase}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis dataKey="dia" stroke="#666" />
+                <YAxis stroke="#666" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '8px' }}
+                  formatter={(value) => value.toLocaleString()}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="volumenAutomatico" 
+                  stroke="#3b82f6" 
+                  fill="#93c5fd" 
+                  strokeWidth={2}
+                  name="Volumen"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Gráfico Tickets Creados */}
+          <div className="bg-white rounded-lg shadow-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">Tendencia Tickets Creados - Mes Completo</h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={datosBase}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis dataKey="dia" stroke="#666" />
+                <YAxis stroke="#666" />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '8px' }}
+                  formatter={(value) => value.toLocaleString()}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="ticketsCreados" 
+                  stroke="#f59e0b" 
+                  strokeWidth={3}
+                  dot={{ fill: '#f59e0b', r: 4 }}
+                  name="Tickets"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Gráfico Semana Actual */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Detalle Semana {metricas.actual.semana} - Volumen vs Tickets
+          </h3>
+          <ResponsiveContainer width="100%" height={350}>
+            <BarChart data={datosPorSemana}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+              <XAxis dataKey="dia" stroke="#666" />
+              <YAxis yAxisId="left" orientation="left" stroke="#3b82f6" />
+              <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" />
+              <Tooltip 
+                contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '8px' }}
+                formatter={(value) => value.toLocaleString()}
+              />
+              <Legend />
+              <Bar 
+                yAxisId="left" 
+                dataKey="volumenAutomatico" 
+                fill="#3b82f6" 
+                name="Volumen Automático"
+                radius={[8, 8, 0, 0]}
+              />
+              <Bar 
+                yAxisId="right" 
+                dataKey="ticketsCreados" 
+                fill="#f59e0b" 
+                name="Tickets Creados"
+                radius={[8, 8, 0, 0]}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Alertas y Recomendaciones */}
+        <div className="bg-white rounded-lg shadow-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Alertas y Recomendaciones</h3>
+          <div className="space-y-3">
+            {metricas.tendenciaVolumen === 'Sube' && (
+              <div className="flex items-start gap-3 p-4 bg-green-50 border-l-4 border-green-500 rounded">
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-green-800">Volumen en aumento</p>
+                  <p className="text-sm text-green-700">El volumen automático está creciendo. Continuar monitoreando capacidad del sistema.</p>
+                </div>
+              </div>
+            )}
+            {metricas.tendenciaTickets === 'Mejora' && (
+              <div className="flex items-start gap-3 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
+                <CheckCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-blue-800">Reducción de tickets</p>
+                  <p className="text-sm text-blue-700">Los tickets están disminuyendo. La mejora en Mi Claro está teniendo impacto positivo.</p>
+                </div>
+              </div>
+            )}
+            {metricas.tendenciaTickets === 'Retroceso' && (
+              <div className="flex items-start gap-3 p-4 bg-red-50 border-l-4 border-red-500 rounded">
+                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-red-800">Incremento en tickets</p>
+                  <p className="text-sm text-red-700">Los tickets han aumentado. Revisar posibles incidencias o errores en la aplicación.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+export default DashboardMiClaro;
